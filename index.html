@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Health Assistant</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a; /* bg-slate-900 */
+            color: #cbd5e1; /* text-slate-300 */
+        }
+        @keyframes subtleGlow {
+            0%, 100% { text-shadow: 0 0 5px rgba(96, 165, 250, 0.3), 0 0 10px rgba(96, 165, 250, 0.2); }
+            50% { text-shadow: 0 0 10px rgba(96, 165, 250, 0.5), 0 0 20px rgba(96, 165, 250, 0.3); }
+        }
+        .gradient-text {
+            background: linear-gradient(to right, #60a5fa, #3b82f6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: subtleGlow 4s ease-in-out infinite;
+        }
+        #results-container .result-card, .modal {
+            animation: fadeIn 0.5s ease-out forwards;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #334155; border-radius: 20px; }
+        .dot-flashing { position: relative; width: 5px; height: 5px; border-radius: 5px; background-color: #94a3b8; color: #94a3b8; animation: dotFlashing 1s infinite linear alternate; animation-delay: .5s; }
+        .dot-flashing::before, .dot-flashing::after { content: ''; display: inline-block; position: absolute; top: 0; width: 5px; height: 5px; border-radius: 5px; background-color: #94a3b8; color: #94a3b8; }
+        .dot-flashing::before { left: -10px; animation: dotFlashing 1s infinite alternate; animation-delay: 0s; }
+        .dot-flashing::after { left: 10px; animation: dotFlashing 1s infinite alternate; animation-delay: 1s; }
+        @keyframes dotFlashing { 0% { background-color: #94a3b8; } 50%, 100% { background-color: rgba(148, 163, 184, 0.2); } }
+        .modal { display: none; }
+        #map { height: 400px; border-radius: 1rem; }
+    </style>
+</head>
+<body class="antialiased">
+
+    <div id="landing-page" class="min-h-screen flex flex-col items-center justify-center text-center p-4">
+        <div class="mb-6 bg-blue-500/20 p-4 rounded-full">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            </svg>
+        </div>
+        <h1 class="text-4xl sm:text-5xl font-extrabold text-slate-100 mb-3">AI Digital Health Assistant</h1>
+        <p class="text-slate-400 max-w-2xl mb-8">Your confidential, AI-powered guide for preliminary health insights. Describe your symptoms to receive an analysis and potential next steps.</p>
+        <button id="begin-btn" class="bg-blue-600 text-white font-bold py-3 px-8 rounded-lg hover:bg-blue-700 transition-transform hover:scale-105">Begin Symptom Check</button>
+        <p class="text-xs text-slate-500 mt-12 max-w-md">Disclaimer: This tool is for informational purposes only and does not constitute medical advice. Always consult with a qualified healthcare professional for any health concerns.</p>
+    </div>
+
+    <div id="feedback-modal" class="modal fixed inset-0 bg-black/70 items-center justify-center p-4 z-50">
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 shadow-2xl w-full max-w-md">
+            <div class="flex justify-between items-center mb-4"><h3 class="text-xl font-bold text-slate-200">Flag for Review</h3><button onclick="toggleModal('feedback-modal', false)" class="text-slate-400 text-2xl hover:text-white">&times;</button></div>
+            <p class="text-slate-400 text-sm mb-4">Help improve our system. This query and response will be flagged for human review.</p>
+            <div class="space-y-4">
+                <div><label for="feedback-reason" class="block text-sm font-medium text-slate-400 mb-2">Reason</label><select id="feedback-reason" class="w-full p-2 bg-slate-700 border border-slate-600 rounded-lg"><option>Response seems inaccurate</option><option>Medication suggestion is questionable</option><option>Response was unclear</option><option>Other</option></select></div>
+                <div><label for="feedback-comments" class="block text-sm font-medium text-slate-400 mb-2">Additional Comments (Optional)</label><textarea id="feedback-comments" rows="3" class="w-full p-2 bg-slate-700 border border-slate-600 rounded-lg" placeholder="Provide more details..."></textarea></div>
+                <button onclick="submitFeedback()" class="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700">Submit Feedback</button>
+            </div>
+        </div>
+    </div>
+    <div id="privacy-modal" class="modal fixed inset-0 bg-black/70 items-center justify-center p-4 z-50">
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 shadow-2xl w-full max-w-md">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-bold text-slate-200 flex items-center gap-2"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>Privacy & Security</h3>
+                <button onclick="toggleModal('privacy-modal', false)" class="text-slate-400 text-2xl hover:text-white">&times;</button>
+            </div>
+            <ul class="text-slate-300 space-y-3 list-disc list-inside">
+                <li>All data is processed securely. We do not store personal health information.</li>
+                <li>Our system is designed in compliance with healthcare regulations like HIPAA.</li>
+                <li>Feedback submitted for review is fully anonymized.</li>
+            </ul>
+        </div>
+    </div>
+    <div id="integration-modal" class="modal fixed inset-0 bg-black/70 items-center justify-center p-4 z-50">
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 shadow-2xl w-full max-w-md">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-bold text-slate-200 flex items-center gap-2"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" /></svg>Integration</h3>
+                <button onclick="toggleModal('integration-modal', false)" class="text-slate-400 text-2xl hover:text-white">&times;</button>
+            </div>
+            <p class="text-slate-300">This system supports a secure <strong class="text-white">Programming Interface (API)</strong> for integration with Electronic Medical Record (EMR) systems.<br><br>We employ <strong class="text-white">Continuous Learning</strong> by using anonymized user feedback to improve diagnostic accuracy and relevance over time.</p>
+        </div>
+    </div>
+    
+    <div id="chat-interface" class="p-4 sm:p-6 lg:p-8 relative main-container hidden">
+        <div class="absolute top-4 sm:top-6 lg:top-8 right-4 sm:right-6 lg:right-8 flex items-center gap-6 z-10">
+            <a href="javascript:void(0);" onclick="toggleModal('privacy-modal', true)" class="flex items-center gap-2 text-slate-400 hover:text-slate-200 transition-colors text-sm font-medium">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                <span>Privacy & Security</span>
+            </a>
+            <a href="javascript:void(0);" onclick="toggleModal('integration-modal', true)" class="flex items-center gap-2 text-slate-400 hover:text-slate-200 transition-colors text-sm font-medium">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" /></svg>
+                <span>Integration</span>
+            </a>
+            <a href="javascript:void(0);" onclick="toggleModal('feedback-modal', true)" class="flex items-center gap-2 text-slate-400 hover:text-slate-200 transition-colors text-sm font-medium">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
+                <span>Feedback</span>
+            </a>
+        </div>
+
+        <header class="mb-6">
+            <div class="flex items-center gap-3 mb-2"><svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-blue-500" viewBox="0 0 20 20" fill="currentColor"><path d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" /></svg><h1 class="text-4xl sm:text-5xl font-extrabold text-slate-100"><span class="gradient-text">AI Digital Health Assistant</span></h1></div>
+            <p class="text-slate-400 mt-1">Your personal, AI-powered preliminary health guide.</p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div class="lg:col-span-2">
+                <div class="bg-slate-800/70 border border-slate-700 rounded-2xl shadow-2xl flex flex-col h-[80vh]">
+                    <div id="chat-log" class="flex-1 p-6 space-y-6 overflow-y-auto custom-scrollbar">
+                        <div class="flex items-start gap-3 justify-start">
+                            <div class="bg-slate-900 p-2 rounded-full flex-shrink-0"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg></div>
+                            <div class="bg-slate-700 rounded-lg p-3 max-w-xl"><p class="text-slate-200">Hello! I'm your AI Health Assistant. Please describe your symptoms below, and I'll do my best to provide some preliminary guidance.</p></div>
+                        </div>
+                    </div>
+                    <div id="typing-indicator" class="px-6 pb-2 h-8 flex items-center"></div>
+                    <div class="p-4 bg-slate-800/50 border-t border-slate-700">
+                         <div class="bg-yellow-900/50 border border-yellow-700 text-yellow-300 px-4 py-2 rounded-lg mb-4 text-sm" role="alert"><p><span class="font-bold">Disclaimer:</span> This is not medical advice. Always consult a healthcare professional.</p></div>
+                        <div class="relative flex items-center">
+                            <textarea id="symptoms-input" rows="1" class="w-full p-3 pr-16 bg-slate-700 border border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 text-slate-200 placeholder-slate-400 resize-none custom-scrollbar" placeholder="Type your symptoms here..."></textarea>
+                            <button id="get-analysis-btn" class="absolute right-2 bg-blue-600 text-white p-2.5 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-500/50 transition-colors duration-300"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" /></svg></button>
+                        </div>
+                    </div>
+                </div>
+                <div id="results-container" class="mt-8"></div>
+            </div>
+            <div class="lg:col-span-1">
+                <div class="sticky top-8 space-y-8">
+                    <div class="bg-slate-800/70 border border-slate-700 rounded-2xl p-6 shadow-2xl h-fit">
+                           <h3 class="text-xl font-bold text-slate-200 mb-4 flex items-center gap-2"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>Health Tip of the Day</h3>
+                           <div id="health-tip-content" class="text-slate-400 min-h-[100px] flex items-center justify-center"></div>
+                    </div>
+                    <div class="bg-slate-800/70 border border-slate-700 rounded-2xl p-6 shadow-2xl">
+                        <h3 class="text-xl font-bold text-slate-200 mb-4 flex items-center gap-2"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-blue-400" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>Important Information</h3>
+                        <div id="info-carousel" class="relative w-full rounded-lg overflow-hidden mt-2 border border-slate-700">
+                             <div id="info-carousel-inner" class="flex transition-transform duration-700 ease-in-out">
+                                <div class="w-full flex-shrink-0 relative"><img src="https://images.unsplash.com/photo-1556740758-90de374c12ad?q=80&w=2070&auto=format&fit=crop" class="w-full h-48 object-cover"><div class="absolute inset-0 bg-black/60 p-4 flex flex-col justify-end"><h4 class="font-bold text-white">Help Us Improve</h4><p class="text-slate-300 text-sm mt-1">If the AI is unclear, please flag the query for review.</p></div></div>
+                                <div class="w-full flex-shrink-0 relative"><img src="https://images.unsplash.com/photo-1579684385127-1ef15d508118?q=80&w=2070&auto=format&fit=crop" class="w-full h-48 object-cover"><div class="absolute inset-0 bg-black/60 p-4 flex flex-col justify-end"><h4 class="font-bold text-white">Not a Doctor</h4><p class="text-slate-300 text-sm mt-1">This AI is not a substitute for a qualified healthcare professional.</p></div></div>
+                                <div class="w-full flex-shrink-0 relative"><img src="https://images.unsplash.com/photo-1526256262350-7da7584cf5eb?q=80&w=2070&auto=format&fit=crop" class="w-full h-48 object-cover"><div class="absolute inset-0 bg-black/60 p-4 flex flex-col justify-end"><h4 class="font-bold text-white">Stay Proactive</h4><p class="text-slate-300 text-sm mt-1">Regular medical check-ups are crucial for prevention.</p></div></div>
+                             </div>
+                             <div id="info-carousel-indicators" class="absolute bottom-3 left-1/2 -translate-x-1/2 flex space-x-2"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyALEHeGEMJ7vmPovwbHOCQBScjcw2VOXCo&libraries=places" async defer></script>
+    <script>
+        // DOM Elements
+        // --- NEW: Added elements for the landing page ---
+        const landingPage = document.getElementById('landing-page');
+        const beginBtn = document.getElementById('begin-btn');
+        const chatInterface = document.getElementById('chat-interface');
+
+        const symptomsInput = document.getElementById('symptoms-input');
+        const getAnalysisBtn = document.getElementById('get-analysis-btn');
+        const resultsContainer = document.getElementById('results-container');
+        const chatLog = document.getElementById('chat-log');
+        const typingIndicator = document.getElementById('typing-indicator');
+        const healthTipContent = document.getElementById('health-tip-content');
+        
+        // State
+        let lastResult = null;
+        let fullSymptomContext = '';
+        let typingTimer;
+
+        // --- NEW: Logic to show the chat interface ---
+        beginBtn.addEventListener('click', () => {
+            landingPage.classList.add('hidden');
+            chatInterface.classList.remove('hidden');
+        });
+
+        // --- Modal Control Logic ---
+        function toggleModal(modalId, show) {
+            const modal = document.getElementById(modalId);
+            if (modal) modal.style.display = show ? 'flex' : 'none';
+        }
+        function submitFeedback() {
+            console.log("Feedback Submitted");
+            alert('Thank you for your feedback!');
+            toggleModal('feedback-modal', false);
+        }
+
+        // --- Typing Indicator & Input Logic ---
+        function showTypingIndicator(message) { typingIndicator.innerHTML = message; }
+        function hideTypingIndicator() { typingIndicator.innerHTML = ''; }
+        symptomsInput.addEventListener('input', () => {
+            clearTimeout(typingTimer);
+            if (symptomsInput.value) {
+                showTypingIndicator(`<p class="text-slate-400 text-sm italic">You are typing...</p>`);
+                typingTimer = setTimeout(hideTypingIndicator, 2000);
+            } else {
+                hideTypingIndicator();
+            }
+            symptomsInput.style.height = 'auto';
+            symptomsInput.style.height = (symptomsInput.scrollHeight) + 'px';
+        });
+        symptomsInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); getAnalysisBtn.click(); }
+        });
+        
+        // --- Health Tip & Carousel Logic ---
+        window.onload = () => {
+            const healthTips = ["Stay hydrated.", "Aim for 7-9 hours of quality sleep.", "Incorporate 30 minutes of moderate exercise daily.", "A balanced diet is key.", "Practice mindfulness to reduce stress."];
+            let currentTipIndex = 0;
+            const healthTipContent = document.getElementById('health-tip-content');
+            healthTipContent.textContent = healthTips[0];
+            setInterval(() => {
+                healthTipContent.style.opacity = 0;
+                setTimeout(() => {
+                    currentTipIndex = (currentTipIndex + 1) % healthTips.length;
+                    healthTipContent.textContent = healthTips[currentTipIndex];
+                    healthTipContent.style.opacity = 1;
+                }, 500);
+            }, 5000);
+            
+            const carouselInner = document.getElementById('info-carousel-inner');
+            const indicatorsContainer = document.getElementById('info-carousel-indicators');
+            if (carouselInner) {
+                const totalSlides = carouselInner.children.length;
+                let currentIndex = 0;
+                for (let i = 0; i < totalSlides; i++) {
+                    const dot = document.createElement('button');
+                    dot.classList.add('w-2', 'h-2', 'rounded-full', 'bg-white/40', 'hover:bg-white/80', 'transition-colors');
+                    dot.addEventListener('click', () => goToSlide(i));
+                    indicatorsContainer.appendChild(dot);
+                }
+                const indicators = indicatorsContainer.children;
+                function updateIndicators() {
+                    for (let i = 0; i < indicators.length; i++) {
+                        indicators[i].classList.toggle('bg-white', i === currentIndex);
+                    }
+                }
+                function goToSlide(index) {
+                    currentIndex = (index + totalSlides) % totalSlides;
+                    carouselInner.style.transform = `translateX(-${currentIndex * 100}%)`;
+                    updateIndicators();
+                    resetAutoPlay();
+                }
+                let autoPlayInterval = setInterval(() => goToSlide(currentIndex + 1), 5000);
+                function resetAutoPlay() { clearInterval(autoPlayInterval); autoPlayInterval = setInterval(() => goToSlide(currentIndex + 1), 5000); }
+                goToSlide(0);
+            }
+        };
+
+        // --- Main Analysis Logic ---
+        getAnalysisBtn.addEventListener('click', async () => {
+            const symptoms = symptomsInput.value.trim();
+            if (!symptoms) return;
+
+            clearTimeout(typingTimer);
+            hideTypingIndicator();
+            
+            chatLog.innerHTML += `<div class="flex items-start gap-3 justify-end"><div class="bg-blue-600 rounded-lg p-3 max-w-xl"><p class="text-white">${symptoms}</p></div></div>`;
+            chatLog.scrollTop = chatLog.scrollHeight;
+            
+            fullSymptomContext = symptoms;
+            symptomsInput.value = '';
+            symptomsInput.style.height = 'auto';
+            
+            showTypingIndicator(`<div class="flex items-center gap-2 text-slate-400 text-sm italic"><span>AI is typing</span><div class="dot-flashing"></div></div>`);
+            resultsContainer.innerHTML = ``;
+
+            try {
+                const mainSystemPrompt = `You are an AI Digital Health Assistant. Your goal is to provide a comprehensive, safe, and informative preliminary analysis based on user-provided symptoms. Follow these rules precisely:
+1.  Analyze symptoms to predict the most probable, common disease. Keep the explanation to 2-3 concise sentences.
+2.  CRITICAL SAFETY: If symptoms suggest a severe condition (e.g., chest pain, difficulty breathing, severe headache), immediately set 'criticalWarning' to true, provide an urgent message to seek emergency help, and do NOT provide any other information.
+3.  Your entire response MUST be a single, valid JSON object.
+4.  The JSON schema is: { "criticalWarning": boolean, "warningMessage": "string | null", "predictedDisease": "string", "confidenceScore": "string", "explanation": "string", "recommendedMedications": [ { "name": "string", "dosage": "string", "precautions": "string" } ], "dietarySuggestions": ["string"], "followUpQuestions": ["string"] }`;
+                const result = await callGeminiAPI(fullSymptomContext, mainSystemPrompt);
+                lastResult = result;
+                displayResults(result);
+            } catch (error) {
+                console.error("API Call failed:", error);
+                resultsContainer.innerHTML = '<p class="text-red-400 text-center">Sorry, an error occurred. Please try again.</p>';
+            } finally {
+                hideTypingIndicator();
+            }
+        });
+        
+        async function callGeminiAPI(userQuery, systemPrompt) {
+            const apiKey = "AIzaSyCDZvzEBRwTeNP_qp6YE9tr9aC9m_OJgJo"; // Replace with your actual API key
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`;
+            const payload = { contents: [{ parts: [{ text: userQuery }] }], systemInstruction: { parts: [{ text: systemPrompt }] }, generationConfig: { responseMimeType: "application/json" } };
+            const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            if (!response.ok) throw new Error(`API error: ${response.statusText}`);
+            const result = await response.json();
+            return JSON.parse(result.candidates[0].content.parts[0].text);
+        }
+
+        function displayResults(data) {
+            resultsContainer.innerHTML = '';
+            
+            if (data.criticalWarning) {
+                resultsContainer.innerHTML = createResultCard('🚨 Urgent Warning', `<p class="text-red-300">${data.warningMessage}</p> <button class="mt-4 bg-red-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-600" onclick="findNearbyHospitals()">Find Nearby Hospitals</button>`);
+                return;
+            }
+
+            let analysisHtml = createResultCard('Analysis & Predicted Condition', `<strong>${data.predictedDisease}</strong> <span class="text-sm text-slate-400 ml-2">(Confidence: ${data.confidenceScore})</span><p class="mt-2">${data.explanation}</p>`);
+            
+            let recommendationsHtml = '';
+            if ((data.recommendedMedications && data.recommendedMedications.length > 0) || (data.dietarySuggestions && data.dietarySuggestions.length > 0) || (data.followUpQuestions && data.followUpQuestions.length > 0)) {
+                let recContent = '';
+                if (data.recommendedMedications && data.recommendedMedications.length > 0) { recContent += `<div class="mt-4 pt-4 border-t border-slate-700">${data.recommendedMedications.map(med => `<p><strong class="text-blue-400">${med.name}</strong>: ${med.dosage}. <span class="text-xs text-slate-400">Precautions: ${med.precautions}</span></p>`).join('')}</div>`; }
+                if (data.dietarySuggestions && data.dietarySuggestions.length > 0) { recContent += `<div class="mt-4 pt-4 border-t border-slate-700"><h4 class="font-bold text-slate-300 mb-2">Dietary Tips</h4><ul class="list-disc list-inside space-y-1">${data.dietarySuggestions.map(tip => `<li>${tip}</li>`).join('')}</ul></div>`; }
+                if (data.followUpQuestions && data.followUpQuestions.length > 0) { recContent += `<div class="mt-4 pt-4 border-t border-slate-700"><h4 class="font-bold text-slate-300 mb-2">Questions for Your Doctor</h4><ul class="list-disc list-inside space-y-1">${data.followUpQuestions.map(q => `<li>${q}</li>`).join('')}</ul></div>`; }
+                recommendationsHtml = createResultCard('Recommendations', recContent);
+            }
+
+            let nextStepsHtml = createResultCard('What would you like to do next?', `
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <button class="flex items-center justify-center gap-3 w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors" onclick="findNearbyHospitals()">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                        <span>Find Nearby Hospitals</span>
+                    </button>
+                    <button class="flex items-center justify-center gap-3 w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors" onclick="getDeeperInsights()">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>
+                        <span>Get Deeper Symptom Insights</span>
+                    </button>
+                </div>
+                <button class="mt-4 flex items-center justify-center gap-3 w-full bg-slate-600/50 text-slate-200 font-bold py-3 px-4 rounded-lg hover:bg-slate-600 transition-colors" onclick="startOver()">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h5M20 20v-5h-5" /><path stroke-linecap="round" stroke-linejoin="round" d="M4 9a9 9 0 0114.13-4.41L20 4M20 15a9 9 0 01-14.13 4.41L4 20" /></svg>
+                    <span>Start New Symptom Check</span>
+                </button>
+            `);
+            
+            resultsContainer.innerHTML = analysisHtml + recommendationsHtml + nextStepsHtml;
+        }
+        
+        // --- Action Button Functions ---
+        function startOver() {
+            resultsContainer.innerHTML = '';
+            const mapEl = document.getElementById('map');
+            if (mapEl) mapEl.remove();
+            lastResult = null;
+            fullSymptomContext = '';
+            symptomsInput.focus();
+        }
+        
+        async function getDeeperInsights() {
+            if (!fullSymptomContext) return;
+            showTypingIndicator(`<div class="flex items-center gap-2 text-slate-400 text-sm italic"><span>Getting deeper insights...</span><div class="dot-flashing"></div></div>`);
+            
+            try {
+                const insightPrompt = `Based on the previous analysis of "${fullSymptomContext}", provide deeper insights. What are some less common, but possible, differential diagnoses? What specific lifestyle changes could help manage these symptoms long-term? Your response MUST be a valid JSON object: { "insights": "string (formatted as markdown)" }`;
+                const result = await callGeminiAPI(fullSymptomContext, insightPrompt);
+                
+                document.querySelector('#results-container').lastElementChild.insertAdjacentHTML('beforebegin', createResultCard('Deeper Symptom Insights', result.insights.replace(/\n/g, '<br>')));
+
+            } catch (error) {
+                console.error("Deeper insights failed:", error);
+            } finally {
+                hideTypingIndicator();
+            }
+        }
+        
+        function createResultCard(title, content) {
+            return `<div class="result-card bg-slate-800/70 border border-slate-700 rounded-2xl p-6 mb-4 shadow-lg"><h3 class="text-xl font-bold text-slate-200 mb-3">${title}</h3><div class="text-slate-300">${content}</div></div>`;
+        }
+
+        // --- Google Maps Functions ---
+        function findNearbyHospitals() {
+            let mapDiv = document.getElementById('map');
+            if (!mapDiv) {
+                mapDiv = document.createElement('div');
+                mapDiv.id = 'map';
+                resultsContainer.insertAdjacentElement('afterend', mapDiv);
+            }
+            
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition((position) => {
+                    const userLocation = { lat: position.coords.latitude, lng: position.coords.longitude };
+                    const map = new google.maps.Map(mapDiv, {
+                        center: userLocation, 
+                        zoom: 13,
+                        styles: [{elementType:'geometry',stylers:[{color:'#242f3e'}]},{elementType:'labels.text.stroke',stylers:[{color:'#242f3e'}]},{elementType:'labels.text.fill',stylers:[{color:'#746855'}]},{featureType:'administrative.locality',elementType:'labels.text.fill',stylers:[{color:'#d59563'}]},{featureType:'poi',elementType:'labels.text.fill',stylers:[{color:'#d59563'}]},{featureType:'poi.park',elementType:'geometry',stylers:[{color:'#263c3f'}]},{featureType:'poi.park',elementType:'labels.text.fill',stylers:[{color:'#6b9a76'}]},{featureType:'road',elementType:'geometry',stylers:[{color:'#38414e'}]},{featureType:'road',elementType:'geometry.stroke',stylers:[{color:'#212a37'}]},{featureType:'road',elementType:'labels.text.fill',stylers:[{color:'#9ca5b3'}]},{featureType:'road.highway',elementType:'geometry',stylers:[{color:'#746855'}]},{featureType:'road.highway',elementType:'geometry.stroke',stylers:[{color:'#1f2835'}]},{featureType:'road.highway',elementType:'labels.text.fill',stylers:[{color:'#f3d19c'}]},{featureType:'transit',elementType:'geometry',stylers:[{color:'#2f3948'}]},{featureType:'transit.station',elementType:'labels.text.fill',stylers:[{color:'#d59563'}]},{featureType:'water',elementType:'geometry',stylers:[{color:'#17263c'}]},{featureType:'water',elementType:'labels.text.fill',stylers:[{color:'#515c6d'}]},{featureType:'water',elementType:'labels.text.stroke',stylers:[{color:'#17263c'}]}]
+                    });
+                    new google.maps.Marker({ position: userLocation, map: map, title: "Your Location" });
+                    const service = new google.maps.places.PlacesService(map);
+                    service.nearbySearch({ location: userLocation, radius: '5000', type: ['hospital', 'doctor', 'drugstore'] }, (results, status) => {
+                        if (status === google.maps.places.PlacesServiceStatus.OK) {
+                            results.forEach(place => {
+                                if (place.geometry && place.geometry.location) {
+                                    new google.maps.Marker({ map, position: place.geometry.location, title: place.name });
+                                }
+                            });
+                        }
+                    });
+                      mapDiv.scrollIntoView({ behavior: 'smooth' });
+                }, () => alert("Geolocation failed. Please enable location services."));
+            } else {
+                alert("Geolocation is not supported by this browser.");
+            }
+        }
+    </script>
+</body>
+</html>
