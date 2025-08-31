@@ -152,7 +152,7 @@
         </div>
     </div>
     
-    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyALEHeGEMJ7vmPovwbHOCQBScjcw2VOXCo&libraries=places" async defer></script>
+    <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAP_API_KEY&libraries=places" async defer></script>
     <script>
         // DOM Elements
         // --- NEW: Added elements for the landing page ---
@@ -287,7 +287,7 @@
         });
         
         async function callGeminiAPI(userQuery, systemPrompt) {
-            const apiKey = "AIzaSyCDZvzEBRwTeNP_qp6YE9tr9aC9m_OJgJo"; // Replace with your actual API key
+            const apiKey = "YOUR_GEMINI_API_KEY"; // Replace with your actual API key
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`;
             const payload = { contents: [{ parts: [{ text: userQuery }] }], systemInstruction: { parts: [{ text: systemPrompt }] }, generationConfig: { responseMimeType: "application/json" } };
             const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
